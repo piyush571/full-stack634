@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dynamic Product Filter with Dropdown</title>
+  <style>
+    body {
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background: #f5f7fa;
+      margin: 0;
+      padding: 0;
+    }
+
+    header {
+      text-align: center;
+      padding: 2rem 1rem;
+      background: linear-gradient(135deg, #6a11cb, #2575fc);
+      color: white;
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 2rem;
+      letter-spacing: 1px;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 2rem auto;
+      padding: 1rem;
+    }
+
+    .filter-box {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    select {
+      padding: 0.6rem 1rem;
+      font-size: 1rem;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      outline: none;
+      background-color: #fff;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    select:hover {
+      border-color: #2575fc;
+      box-shadow: 0 0 6px rgba(37, 117, 252, 0.3);
+    }
+
+    .product-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .product-card {
+      background: white;
+      padding: 1rem;
+      border-radius: 12px;
+      text-align: center;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .product-card:hover {
+      transform: translateY(-6px);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    .product-card img {
+      max-width: 100%;
+      border-radius: 8px;
+      height: 150px;
+      object-fit: cover;
+      margin-bottom: 1rem;
+    }
+
+    .product-card h3 {
+      margin: 0.5rem 0;
+      font-size: 1.2rem;
+      color: #333;
+    }
+
+    .product-card p {
+      margin: 0;
+      color: #777;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Dynamic Product Filter</h1>
+    <p>Filter products instantly by category</p>
+  </header>
+
+  <div class="container">
+    <div class="filter-box">
+      <label for="filter">Choose Category: </label>
+      <select id="filter">
+        <option value="all">All</option>
+        <option value="shoes">Shoes</option>
+        <option value="shirts">Shirts</option>
+        <option value="gadgets">Gadgets</option>
+      </select>
+    </div>
+
+    <div class="product-grid" id="product-list">
+      <div class="product-card" data-category="shoes">
+        <img src="https://via.placeholder.com/200x150/6a11cb/fff?text=Shoes+1" alt="Shoes">
+        <h3>Running Shoes</h3>
+        <p>Category: Shoes</p>
+      </div>
+      <div class="product-card" data-category="shoes">
+        <img src="https://via.placeholder.com/200x150/2575fc/fff?text=Shoes+2" alt="Shoes">
+        <h3>Casual Sneakers</h3>
+        <p>Category: Shoes</p>
+      </div>
+      <div class="product-card" data-category="shirts">
+        <img src="https://via.placeholder.com/200x150/ff6f61/fff?text=Shirt+1" alt="Shirt">
+        <h3>Formal Shirt</h3>
+        <p>Category: Shirts</p>
+      </div>
+      <div class="product-card" data-category="shirts">
+        <img src="https://via.placeholder.com/200x150/ffa500/fff?text=Shirt+2" alt="Shirt">
+        <h3>Casual T-Shirt</h3>
+        <p>Category: Shirts</p>
+      </div>
+      <div class="product-card" data-category="gadgets">
+        <img src="https://via.placeholder.com/200x150/20b2aa/fff?text=Gadget+1" alt="Gadget">
+        <h3>Smartphone</h3>
+        <p>Category: Gadgets</p>
+      </div>
+      <div class="product-card" data-category="gadgets">
+        <img src="https://via.placeholder.com/200x150/8a2be2/fff?text=Gadget+2" alt="Gadget">
+        <h3>Wireless Earbuds</h3>
+        <p>Category: Gadgets</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const filterDropdown = document.getElementById("filter");
+    const products = document.querySelectorAll(".product-card");
+
+    filterDropdown.addEventListener("change", function () {
+      const selectedCategory = this.value;
+
+      products.forEach(product => {
+        const category = product.getAttribute("data-category");
+
+        if (selectedCategory === "all" || category === selectedCategory) {
+          product.style.display = "block";
+        } else {
+          product.style.display = "none";
+        }
+      });
+    });
+  </script>
+</body>
+</html>
