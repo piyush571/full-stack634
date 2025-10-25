@@ -1,0 +1,67 @@
+const express = require('express');
+const app = express();
+const PORT = 3000;
+
+// Import Middlewares
+const { loggerMiddleware } = require('./middlewares/logger');
+const { authMiddleware } = require('./middlewares/auth');
+
+// Use middleware globally
+app.use(loggerMiddleware);
+
+// Public route
+app.get('/', (req, res) => {
+  res.send('Welcome to the Public API 🚀');
+});
+
+// Protected route (requires Bearer Token)
+app.get('/secure', authMiddleware, (req, res) => {
+  res.json({
+    message: 'You have accessed a protected route!',
+    user: req.user
+  });
+});
+
+app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
+
+
+
+// Simple request logging middleware
+function loggerMiddleware(req, res, next) {
+  const currentTime = new Date().toISOString();
+  console.log(`[${currentTime}] ${req.method} ${req.originalUrl}`);
+  next(); // move to next middleware or route
+}
+
+module.exports = { loggerMiddleware };
+
+
+
+// Bearer token authentication middleware
+function authMiddleware(req, res, next) {
+  const authHeader = req.headers['authorization'];
+
+  if (!authHeader) {
+    return res.status(401).json({ error: 'Authorization header missing' });
+  }
+
+  const token = authHeader.split(' ')[1]; // Expect "Bearer <token>"
+
+  if (!token) {
+    return res.status(401).json({ error: 'Bearer token missing' });
+  }
+
+  // Example: Replace this with actual token verification (JWT or custom logic)
+  const validToken = 'mysecrettoken123';
+
+  if (token !== validToken) {
+    return res.status(403).json({ error: 'Invalid token' });
+  }
+
+  // Add user info to request (optional)
+  req.user = { id: 1, name: 'Authenticated User' };
+
+  next(); // proceed to route handler
+}
+
+module.exports = { authMiddleware };
