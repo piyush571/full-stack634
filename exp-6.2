@@ -1,0 +1,179 @@
+PORT=4000
+JWT_ACCESS_SECRET=replace_with_strong_random_access_secret
+JWT_REFRESH_SECRET=replace_with_strong_random_refresh_secret
+ACCESS_TOKEN_EXPIRES_IN=15m
+REFRESH_TOKEN_EXPIRES_IN=7d
+
+//server.js
+require('dotenv').config();
+const express = require('express');
+const cookieParser = require('cookie-parser');
+const authRoutes = require('./authController');
+const { jwtAuth } = require('./middlewares/auth');
+const { logger } = require('./middlewares/logger');
+
+const app = express();
+app.use(express.json());
+app.use(cookieParser());
+app.use(logger);
+
+// Public auth routes
+app.use('/auth', authRoutes);
+
+// Protected banking endpoint
+app.get('/bank/account', jwtAuth, (req, res) => {
+  // req.user was attached by jwtAuth middleware
+  const account = {
+    id: 'acc-' + req.user.id,
+    owner: req.user.username,
+    balance: 12500.45,
+    currency: 'USD'
+  };
+  res.json({ success: true, account });
+});
+
+// Logout (revoke refresh token)
+app.post('/auth/logout', (req, res) => {
+  // In a real app delete refresh token from DB/store.
+  res.clearCookie('refreshToken', { httpOnly: true, secure: true, sameSite: 'strict' });
+  res.json({ success: true, message: 'Logged out' });
+});
+
+const PORT = process.env.PORT || 4000;
+app.listen(PORT, () => console.log(`Server listening on ${PORT}`));
+
+//autocontrol.js
+
+const express = require('express');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const { v4: uuidv4 } = require('uuid');
+
+const router = express.Router();
+
+// Simple in-memory user+refresh store (replace with DB in real app)
+const users = new Map(); // key: username -> { id, username, passwordHash }
+const refreshTokensStore = new Map(); // key: refreshTokenId -> { token, userId, expiresAt }
+
+// helpers
+const signAccessToken = (user) => {
+  return jwt.sign({ id: user.id, username: user.username }, process.env.JWT_ACCESS_SECRET, {
+    expiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN || '15m'
+  });
+};
+
+const signRefreshToken = (user, rtId) => {
+  // embed a refresh-token-id to support revocation
+  return jwt.sign({ id: user.id, rtId }, process.env.JWT_REFRESH_SECRET, {
+    expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || '7d'
+  });
+};
+
+// REGISTER
+router.post('/register', async (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) return res.status(400).json({ error: 'Missing username/password' });
+  if (users.has(username)) return res.status(409).json({ error: 'User exists' });
+
+  const passwordHash = await bcrypt.hash(password, 12);
+  const id = uuidv4();
+  users.set(username, { id, username, passwordHash });
+
+  res.status(201).json({ success: true, message: 'User created' });
+});
+
+// LOGIN -> issues access & refresh tokens (refresh in HttpOnly cookie)
+router.post('/login', async (req, res) => {
+  const { username, password } = req.body;
+  const user = users.get(username);
+  if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+
+  const match = await bcrypt.compare(password, user.passwordHash);
+  if (!match) return res.status(401).json({ error: 'Invalid credentials' });
+
+  const accessToken = signAccessToken(user);
+  const rtId = uuidv4();
+  const refreshToken = signRefreshToken(user, rtId);
+
+  // store refresh token (persist in DB with expiry in production)
+  refreshTokensStore.set(rtId, {
+    token: refreshToken,
+    userId: user.id,
+    expiresAt: Date.now() + (7 * 24 * 60 * 60 * 1000) // 7 days
+  });
+
+  // Set HttpOnly secure cookie for refresh token
+  res.cookie('refreshToken', refreshToken, {
+    httpOnly: true,
+    secure: true,       // set true in production with HTTPS
+    sameSite: 'strict',
+    maxAge: 7 * 24 * 60 * 60 * 1000
+  });
+
+  res.json({ success: true, accessToken });
+});
+
+// TOKEN REFRESH (reads refresh token from cookie OR body)
+router.post('/refresh', (req, res) => {
+  const token = req.cookies.refreshToken || req.body.refreshToken;
+  if (!token) return res.status(401).json({ error: 'Refresh token missing' });
+
+  try {
+    const payload = jwt.verify(token, process.env.JWT_REFRESH_SECRET);
+    const { id: userId, rtId } = payload;
+
+    // Validate refresh token exists in store
+    const stored = refreshTokensStore.get(rtId);
+    if (!stored || stored.token !== token) {
+      return res.status(403).json({ error: 'Refresh token revoked or invalid' });
+    }
+
+    // Optionally check expiry stored.expiresAt
+
+    // Create new access token (and optionally rotate refresh token)
+    const user = [...users.values()].find(u => u.id === userId);
+    if (!user) return res.status(401).json({ error: 'User not found' });
+
+    const newAccessToken = jwt.sign({ id: user.id, username: user.username }, process.env.JWT_ACCESS_SECRET, {
+      expiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN || '15m'
+    });
+
+    res.json({ success: true, accessToken: newAccessToken });
+  } catch (err) {
+    return res.status(403).json({ error: 'Invalid refresh token' });
+  }
+});
+
+module.exports = router;
+//middleware.js
+
+const jwt = require('jsonwebtoken');
+
+// Protect endpoints
+const jwtAuth = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader) return res.status(401).json({ error: 'Authorization header missing' });
+
+  const [scheme, token] = authHeader.split(' ');
+  if (scheme !== 'Bearer' || !token) return res.status(401).json({ error: 'Malformed auth header' });
+
+  try {
+    const payload = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
+    // attach user info for handlers
+    req.user = { id: payload.id, username: payload.username };
+    next();
+  } catch (err) {
+    // token expired or invalid
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+};
+
+module.exports = { jwtAuth };
+//logger.js
+const logger = (req, res, next) => {
+  const now = new Date().toISOString();
+  console.log(`[${now}] ${req.ip} ${req.method} ${req.originalUrl}`);
+  next();
+};
+
+module.exports = { logger };
